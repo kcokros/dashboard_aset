@@ -16,7 +16,7 @@ const PAL = ["#2563EB","#059669","#D97706","#7C3AED","#0EA5E9","#E11D48","#8B5CF
 const PAGE_SIZE = 50;
 const SEARCH_FIELDS = ["ID","Debitur","Bank","Alamat","Kota_Kab","KPKNL","Jenis_Sertifikat"];
 
-const DROP_FILTERS = [
+const MULTI_FILTERS = [
   { key:"Source",l:"Sumber" },{ key:"Provinsi",l:"Provinsi" },
   { key:"Kanwil",l:"Kanwil" },{ key:"KPKNL",l:"KPKNL" },
   { key:"Kota_Kab",l:"Kota/Kab" },{ key:"Jenis_Aset",l:"Jenis Aset" },
@@ -30,7 +30,7 @@ const TABLE_COLS = [
   { k:"Jenis_Aset",l:"Jenis",w:80 },{ k:"Provinsi",l:"Provinsi",w:100 },
   { k:"Kota_Kab",l:"Kota/Kab",w:110 },{ k:"KPKNL",l:"KPKNL",w:130 },
   { k:"Kuadran",l:"Kdr",w:32 },{ k:"Neraca_CaLK",l:"Neraca",w:62 },
-  { k:"Kepemilikan_Tier",l:"Kepemilikan",w:88,badge:1 },
+  { k:"Kepemilikan_Tier",l:"Kepemilikan",w:120,badge:1 },
   { k:"Masa_Berlaku",l:"Berlaku",w:72,badge:1 },
   { k:"Penitipan_Status",l:"Titip",w:48,badge:1 },
   { k:"Blokir_Status",l:"Blokir",w:48,badge:1 },
@@ -58,20 +58,51 @@ function fmtCell(v,num){
   if(num)return typeof v==="number"?v.toLocaleString("id-ID"):v;
   return String(v).length>50?String(v).slice(0,48)+"...":String(v);
 }
-function agg(data,key,limit=10){
+function agg(data,key,limit=12){
   const m={};
   data.forEach(r=>{const k=r[key];if(k!=null&&k!=="")m[k]=(m[k]||0)+1;});
   return Object.entries(m).map(([name,v])=>({name,v})).sort((a,b)=>b.v-a.v).slice(0,limit);
 }
 
+// Jenis Aset grouping (chart-level only, raw data stays unchanged)
+function groupJA(v){
+  if(!v)return null;
+  const u=String(v).toUpperCase();
+  if(u==="TANAH")return"Tanah";
+  if(u==="TANAH DAN BANGUNAN")return"Tanah & Bangunan";
+  if(u==="GEDUNG"||u==="BANGUNAN")return"Gedung/Bangunan";
+  if(u==="RUKO"||u==="KIOS"||u==="TOKO")return"Ruko/Kios";
+  if(u==="PABRIK"||u==="GUDANG")return"Pabrik/Gudang";
+  if(u==="VILLA"||u==="RUMAH"||u==="APARTEMEN")return"Villa/Rumah/Apartemen";
+  if(u==="SURAT BERHARGA")return"Surat Berharga";
+  if(u==="HOTEL")return"Hotel";
+  if(u==="RUANG KANTOR"||u==="RUKAN")return"Ruang Kantor";
+  if(u==="PASAR")return"Pasar";
+  return v;
+}
+function aggGrouped(data,key,groupFn,limit=12){
+  const m={};
+  data.forEach(r=>{const k=groupFn(r[key]);if(k)m[k]=(m[k]||0)+1;});
+  return Object.entries(m).map(([name,v])=>({name,v})).sort((a,b)=>b.v-a.v).slice(0,limit);
+}
+
+// Kepemilikan label mapping (for data exported with old labels)
+const KEP_MAP={"Sertifikat":"SHP/SHM/SHGB/SHMSRS","Dok Kepemilikan":"Girik/Letter C/Petok","Dok Lainnya":"AJB/Covernote/dll"};
+function mapKep(v){return KEP_MAP[v]||v;}
+
+// Released reason mapping
+function mapRel(v){if(v==="Administratif")return"Lainnya";return v;}
+
 /* ═══════════════════════════════════════════════════════
    SUB-COMPONENTS
    ═══════════════════════════════════════════════════════ */
 
-const BADGE_COLORS = {
-  "Sertifikat":{bg:"#DCFCE7",fg:"#166534"},"Dok Kepemilikan":{bg:"#FEF9C3",fg:"#854D0E"},
-  "Dok Lainnya":{bg:"#F1F5F9",fg:"#475569"},"Aktif":{bg:"#DCFCE7",fg:"#166534"},
-  "Tidak Aktif":{bg:"#FEE2E2",fg:"#991B1B"},"Tidak Diketahui":{bg:"#F1F5F9",fg:"#475569"},
+const BADGE_COLORS={
+  "SHP/SHM/SHGB/SHMSRS":{bg:"#DCFCE7",fg:"#166534"},"Sertifikat":{bg:"#DCFCE7",fg:"#166534"},
+  "Girik/Letter C/Petok":{bg:"#FEF9C3",fg:"#854D0E"},"Dok Kepemilikan":{bg:"#FEF9C3",fg:"#854D0E"},
+  "AJB/Covernote/dll":{bg:"#F1F5F9",fg:"#475569"},"Dok Lainnya":{bg:"#F1F5F9",fg:"#475569"},
+  "Aktif":{bg:"#DCFCE7",fg:"#166534"},"Tidak Aktif":{bg:"#FEE2E2",fg:"#991B1B"},
+  "Tidak Diketahui":{bg:"#F1F5F9",fg:"#475569"},
   "Sudah":{bg:"#DBEAFE",fg:"#1E40AF"},"Belum":{bg:"#FEF3C7",fg:"#92400E"},
 };
 function Badge({value}){
@@ -93,7 +124,7 @@ function KPI({label,value,sub,accent}){
 function ChartCard({title,children,style:sx}){
   return(
     <div style={{background:C.white,borderRadius:8,padding:"12px 14px 6px",boxShadow:"0 1px 2px rgba(0,0,0,0.04)",display:"flex",flexDirection:"column",...sx}}>
-      <div style={{fontSize:11,fontWeight:600,color:C.navy,marginBottom:6}}>{title}</div>
+      {title&&<div style={{fontSize:11,fontWeight:600,color:C.navy,marginBottom:6}}>{title}</div>}
       <div style={{flex:1,minHeight:0}}>{children}</div>
     </div>
   );
@@ -104,7 +135,7 @@ function HBar({data,color,h=200}){
     <ResponsiveContainer width="100%" height={h}>
       <BarChart data={data} layout="vertical" margin={{left:8,right:14,top:0,bottom:0}}>
         <XAxis type="number" tickFormatter={fmt} tick={{fontSize:9}}/>
-        <YAxis type="category" dataKey="name" width={105} tick={{fontSize:9}}/>
+        <YAxis type="category" dataKey="name" width={130} tick={{fontSize:9}} interval={0}/>
         <Tooltip formatter={v=>v.toLocaleString("id-ID")}/>
         <Bar dataKey="v" fill={color||C.blue} radius={[0,3,3,0]} barSize={15}/>
       </BarChart>
@@ -157,27 +188,110 @@ function MultiChips({label,all,selected,onChange}){
   );
 }
 
+/* ── Multi-select dropdown ── */
+function FilterDropdown({label,allOptions,selected,onChange}){
+  // selected: null = no filter (all pass), Set = only these pass
+  const [open,setOpen]=useState(false);
+  const [q,setQ]=useState("");
+  const ref=useRef();
+
+  useEffect(()=>{
+    if(!open)return;
+    const h=e=>{if(ref.current&&!ref.current.contains(e.target)){setOpen(false);setQ("");}};
+    document.addEventListener("mousedown",h);
+    return()=>document.removeEventListener("mousedown",h);
+  },[open]);
+
+  const isAll=selected===null;
+  const count=isAll?allOptions.length:selected.size;
+  const isActive=!isAll&&count<allOptions.length;
+  const visible=q?allOptions.filter(o=>o.toLowerCase().includes(q.toLowerCase())):allOptions;
+  const isChecked=opt=>isAll||selected.has(opt);
+
+  const toggle=opt=>{
+    if(isAll){
+      const next=new Set(allOptions);next.delete(opt);onChange(next);
+    } else {
+      const next=new Set(selected);
+      if(next.has(opt))next.delete(opt);else next.add(opt);
+      if(next.size===allOptions.length)onChange(null);else onChange(next);
+    }
+  };
+
+  return(
+    <div ref={ref} style={{position:"relative",flex:1,minWidth:105}}>
+      <div style={{fontSize:8,fontWeight:600,color:C.slate,textTransform:"uppercase",letterSpacing:.3,marginBottom:1}}>
+        {label} <span style={{opacity:.5}}>({allOptions.length})</span>
+      </div>
+      <button onClick={()=>setOpen(p=>!p)} style={{
+        width:"100%",padding:"5px 7px",fontSize:11,border:`1px solid ${isActive?C.blue:C.border}`,borderRadius:4,
+        background:C.white,color:C.navy,cursor:"pointer",textAlign:"left",fontWeight:isActive?600:400,
+        display:"flex",justifyContent:"space-between",alignItems:"center"
+      }}>
+        <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+          {isAll?"Semua":count===0?"Tidak ada":`${count} dipilih`}
+        </span>
+        <span style={{fontSize:8,marginLeft:4,color:C.slate}}>▾</span>
+      </button>
+
+      {open&&(
+        <div style={{
+          position:"absolute",top:"100%",left:0,minWidth:200,maxWidth:320,zIndex:50,marginTop:2,
+          background:C.white,border:`1px solid ${C.border}`,borderRadius:6,
+          boxShadow:"0 4px 12px rgba(0,0,0,0.1)",overflow:"hidden"
+        }}>
+          {/* Search (only if many options) */}
+          {allOptions.length>6&&(
+            <div style={{padding:"6px 8px",borderBottom:`1px solid ${C.border}`}}>
+              <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Cari..."
+                style={{width:"100%",padding:"4px 6px",fontSize:11,border:`1px solid ${C.border}`,borderRadius:3,outline:"none",boxSizing:"border-box"}}/>
+            </div>
+          )}
+
+          {/* Select all / Clear */}
+          <div style={{display:"flex",gap:4,padding:"5px 8px",borderBottom:`1px solid ${C.light}`}}>
+            <button onClick={()=>onChange(null)} style={{fontSize:10,color:C.blue,background:"none",border:"none",cursor:"pointer",fontWeight:600,padding:0}}>Pilih Semua</button>
+            <span style={{color:C.border}}>|</span>
+            <button onClick={()=>onChange(new Set())} style={{fontSize:10,color:C.rose,background:"none",border:"none",cursor:"pointer",fontWeight:600,padding:0}}>Hapus</button>
+          </div>
+
+          {/* Options list */}
+          <div style={{maxHeight:220,overflowY:"auto"}}>
+            {visible.length===0&&<div style={{padding:"8px 10px",fontSize:10,color:C.slate}}>Tidak ditemukan</div>}
+            {visible.map(opt=>(
+              <label key={opt} style={{
+                display:"flex",alignItems:"center",gap:6,padding:"4px 10px",cursor:"pointer",fontSize:11,color:C.navy,
+                background:isChecked(opt)?"#F8FAFC":"transparent"
+              }} onMouseDown={e=>e.preventDefault()} onClick={()=>toggle(opt)}>
+                <span style={{
+                  width:14,height:14,borderRadius:3,border:`1.5px solid ${isChecked(opt)?C.blue:C.border}`,
+                  background:isChecked(opt)?C.blue:"transparent",display:"flex",alignItems:"center",justifyContent:"center",
+                  flexShrink:0,fontSize:9,color:C.white,fontWeight:700
+                }}>{isChecked(opt)?"✓":""}</span>
+                <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{opt}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function RangeInput({label,value,onChange,formatFn}){
   const [lo,hi]=value;
   const [loTxt,setLoTxt]=useState(String(lo));
   const [hiTxt,setHiTxt]=useState(String(hi));
-
   useEffect(()=>{setLoTxt(String(Math.round(lo)));setHiTxt(String(Math.round(hi)));},[lo,hi]);
-
-  const commit=()=>{
-    const nlo=Number(loTxt)||0;
-    const nhi=Number(hiTxt)||0;
-    onChange([Math.min(nlo,nhi),Math.max(nlo,nhi)]);
-  };
-  const inputSt={width:100,padding:"5px 6px",fontSize:11,border:`1px solid ${C.border}`,borderRadius:4,color:C.navy,outline:"none",textAlign:"right",fontVariantNumeric:"tabular-nums"};
-
+  const commit=()=>{const nlo=Number(loTxt)||0;const nhi=Number(hiTxt)||0;onChange([Math.min(nlo,nhi),Math.max(nlo,nhi)]);};
+  const inSt={width:100,padding:"5px 6px",fontSize:11,border:`1px solid ${C.border}`,borderRadius:4,color:C.navy,outline:"none",textAlign:"right",fontVariantNumeric:"tabular-nums"};
   return(
     <div style={{flex:1,minWidth:180}}>
       <div style={{fontSize:8.5,fontWeight:600,color:C.slate,textTransform:"uppercase",letterSpacing:.3,marginBottom:3}}>{label}</div>
       <div style={{display:"flex",alignItems:"center",gap:4}}>
-        <input style={inputSt} value={loTxt} onChange={e=>setLoTxt(e.target.value)} onBlur={commit} onKeyDown={e=>e.key==="Enter"&&commit()}/>
+        <input style={inSt} value={loTxt} onChange={e=>setLoTxt(e.target.value)} onBlur={commit} onKeyDown={e=>e.key==="Enter"&&commit()}/>
         <span style={{fontSize:10,color:C.slate}}>s/d</span>
-        <input style={inputSt} value={hiTxt} onChange={e=>setHiTxt(e.target.value)} onBlur={commit} onKeyDown={e=>e.key==="Enter"&&commit()}/>
+        <input style={inSt} value={hiTxt} onChange={e=>setHiTxt(e.target.value)} onBlur={commit} onKeyDown={e=>e.key==="Enter"&&commit()}/>
       </div>
       <div style={{fontSize:9,color:"#94A3B8",marginTop:2}}>{formatFn(lo)} — {formatFn(hi)}</div>
     </div>
@@ -202,7 +316,7 @@ function UploadView({onData}){
         <div onClick={()=>ref.current.click()}
           onDragOver={e=>{e.preventDefault();setDrag(true)}} onDragLeave={()=>setDrag(false)}
           onDrop={e=>{e.preventDefault();setDrag(false);go(e.dataTransfer.files[0])}}
-          style={{border:`2px dashed ${drag?C.blue:C.border}`,borderRadius:12,padding:"44px 36px",cursor:"pointer",background:C.white,transition:"border-color .2s"}}>
+          style={{border:`2px dashed ${drag?C.blue:C.border}`,borderRadius:12,padding:"44px 36px",cursor:"pointer",background:C.white}}>
           <div style={{fontSize:28,marginBottom:6}}>📂</div>
           <div style={{fontSize:13,fontWeight:600,color:C.navy}}>Klik atau drag file JSON</div>
         </div>
@@ -217,7 +331,8 @@ function UploadView({onData}){
    ═══════════════════════════════════════════════════════ */
 export default function Dashboard(){
   const [raw,setRaw]=useState(null);
-  const [df,setDf]=useState({});
+  // Multi-select filters: null = no filter (all), Set = selected values
+  const [mf,setMf]=useState({});
   const [neracaSel,setNeracaSel]=useState(null);
   const [kuadranSel,setKuadranSel]=useState(null);
   const [ranges,setRanges]=useState({});
@@ -227,6 +342,11 @@ export default function Dashboard(){
   const [sortAsc,setSortAsc]=useState(true);
   const [geoTab,setGeoTab]=useState("Provinsi");
   const [showF,setShowF]=useState(true);
+
+  // Set a multi-filter
+  const setMfKey=useCallback((key,val)=>{
+    setMf(p=>{const n={...p};n[key]=val;return n;});setPage(0);
+  },[]);
 
   /* ── Init on load ── */
   useEffect(()=>{
@@ -244,11 +364,9 @@ export default function Dashboard(){
     const nd=new Set(nv);nd.delete("RELEASED");
     setNeracaSel(nd);setKuadranSel(kv);
     setRanges({Luas_Tanah:lt,Luas_Bangunan:lb,Nilai:nv2});
+    setMf({});
   },[raw]);
 
-  const setDrop=useCallback((k,v)=>{setDf(p=>{const n={...p};if(v)n[k]=v;else delete n[k];return n;});setPage(0);},[]);
-
-  /* ── Data ranges (fixed from raw) ── */
   const dataR=useMemo(()=>{
     if(!raw)return null;
     let lt=[Infinity,0],lb=[Infinity,0],nv=[Infinity,0];
@@ -265,7 +383,7 @@ export default function Dashboard(){
   const allKuadran=useMemo(()=>raw?[...new Set(raw.map(r=>r.Kuadran).filter(Boolean))].sort():[],[raw]);
 
   const resetAll=useCallback(()=>{
-    setDf({});setSearch("");setPage(0);setSortKey(null);
+    setMf({});setSearch("");setPage(0);setSortKey(null);
     if(raw&&dataR){
       const nd=new Set(allNeraca);nd.delete("RELEASED");setNeracaSel(nd);
       setKuadranSel(new Set(allKuadran));
@@ -273,11 +391,30 @@ export default function Dashboard(){
     }
   },[raw,dataR,allNeraca,allKuadran]);
 
+  // Helper: is a multi-filter active (restricting)?
+  const isActive=(key)=>{
+    const s=mf[key];return s!==null&&s!==undefined;
+  };
+  const passes=(r,key)=>{
+    const s=mf[key];
+    if(s===null||s===undefined)return true;
+    return s.has(r[key]);
+  };
+
   /* ── Filtered data ── */
   const filtered=useMemo(()=>{
     if(!raw||!neracaSel||!kuadranSel||!ranges.Luas_Tanah)return[];
     let d=raw;
-    Object.entries(df).forEach(([k,v])=>{if(v)d=d.filter(r=>r[k]===v);});
+    // Multi-select dropdown filters
+    MULTI_FILTERS.forEach(({key})=>{
+      const s=mf[key];
+      if(s!==null&&s!==undefined&&s.size>0){
+        d=d.filter(r=>r[key]!=null&&s.has(r[key]));
+      } else if(s!==null&&s!==undefined&&s.size===0){
+        d=[];
+      }
+    });
+    // Neraca + Kuadran chips
     d=d.filter(r=>{
       if(r.Neraca_CaLK&&!neracaSel.has(r.Neraca_CaLK))return false;
       if(r.Kuadran&&!kuadranSel.has(r.Kuadran))return false;
@@ -289,34 +426,45 @@ export default function Dashboard(){
     });
     if(search.trim()){const q=search.trim().toLowerCase();d=d.filter(r=>SEARCH_FIELDS.some(f=>r[f]&&String(r[f]).toLowerCase().includes(q)));}
     return d;
-  },[raw,df,neracaSel,kuadranSel,ranges,search]);
+  },[raw,mf,neracaSel,kuadranSel,ranges,search]);
 
   /* ── Cascading dropdown options ── */
   const dropOpts=useMemo(()=>{
     if(!raw||!neracaSel||!kuadranSel)return{};
-    const active=Object.entries(df).filter(([,v])=>v);
     const o={};
-    DROP_FILTERS.forEach(({key})=>{
+    MULTI_FILTERS.forEach(({key})=>{
       let sub=raw;
-      active.forEach(([k,v])=>{if(k!==key)sub=sub.filter(r=>r[k]===v);});
+      // Apply all OTHER active multi-filters
+      MULTI_FILTERS.forEach(({key:k2})=>{
+        if(k2===key)return;
+        const s=mf[k2];
+        if(s!==null&&s!==undefined&&s.size>0)sub=sub.filter(r=>r[k2]!=null&&s.has(r[k2]));
+      });
+      // Apply neraca + kuadran
       sub=sub.filter(r=>{
         if(r.Neraca_CaLK&&!neracaSel.has(r.Neraca_CaLK))return false;
         if(r.Kuadran&&!kuadranSel.has(r.Kuadran))return false;
         return true;
       });
       if(search.trim()){const q=search.trim().toLowerCase();sub=sub.filter(r=>SEARCH_FIELDS.some(f=>r[f]&&String(r[f]).toLowerCase().includes(q)));}
-      const set=new Set();sub.forEach(r=>{if(r[key])set.add(r[key]);});
+      const set=new Set();sub.forEach(r=>{if(r[key]!=null)set.add(r[key]);});
       o[key]=[...set].sort();
     });
     return o;
-  },[raw,df,neracaSel,kuadranSel,search]);
+  },[raw,mf,neracaSel,kuadranSel,search]);
 
-  /* ── Auto-clear stale dropdown values ── */
+  /* ── Auto-clear stale multi-filter values ── */
   useEffect(()=>{
     if(!Object.keys(dropOpts).length)return;
-    let stale=false;const c={...df};
-    Object.entries(df).forEach(([k,v])=>{if(v&&dropOpts[k]&&!dropOpts[k].includes(v)){delete c[k];stale=true;}});
-    if(stale)setDf(c);
+    let changed=false;const next={...mf};
+    MULTI_FILTERS.forEach(({key})=>{
+      const s=mf[key];
+      if(s===null||s===undefined)return;
+      const avail=new Set(dropOpts[key]||[]);
+      const cleaned=new Set([...s].filter(v=>avail.has(v)));
+      if(cleaned.size!==s.size){next[key]=cleaned.size===avail.size?null:cleaned;changed=true;}
+    });
+    if(changed)setMf(next);
   },[dropOpts]);
 
   /* ── Sort ── */
@@ -333,7 +481,6 @@ export default function Dashboard(){
   const totalPg=Math.ceil(sorted.length/PAGE_SIZE);
   const pgData=sorted.slice(page*PAGE_SIZE,(page+1)*PAGE_SIZE);
 
-  /* ── KPIs ── */
   const kpi=useMemo(()=>{
     let nilai=0,luas=0,mapped=0,bidang=0;
     filtered.forEach(r=>{
@@ -345,7 +492,15 @@ export default function Dashboard(){
 
   const handleSort=useCallback(k=>{setSortKey(p=>{if(p===k){setSortAsc(a=>!a);return k;}setSortAsc(true);return k;});},[]);
 
-  /* ── Render gates ── */
+  // Count active filters for badge
+  const activeFilterCount=useMemo(()=>{
+    let c=0;
+    MULTI_FILTERS.forEach(({key})=>{const s=mf[key];if(s!==null&&s!==undefined)c++;});
+    if(!allNeraca.every(v=>neracaSel&&neracaSel.has(v)))c++;
+    if(!allKuadran.every(v=>kuadranSel&&kuadranSel.has(v)))c++;
+    return c;
+  },[mf,neracaSel,kuadranSel,allNeraca,allKuadran]);
+
   if(!raw)return<UploadView onData={setRaw}/>;
   if(!neracaSel||!ranges.Luas_Tanah)return null;
 
@@ -353,8 +508,6 @@ export default function Dashboard(){
     textAlign:"left",whiteSpace:"nowrap",minWidth:w,borderBottom:`2px solid ${C.border}`,cursor:"pointer",userSelect:"none",
     position:"sticky",top:0,background:C.white,zIndex:1});
   const tdSt={padding:"5px 8px",fontSize:10.5,color:"#334155",borderBottom:`1px solid ${C.light}`,whiteSpace:"nowrap"};
-  const selSt=on=>({padding:"5px 7px",fontSize:11,border:`1px solid ${on?C.blue:C.border}`,borderRadius:4,
-    background:C.white,color:C.navy,cursor:"pointer",outline:"none",width:"100%",fontWeight:on?600:400});
   const geoTabs=[{k:"Provinsi",l:"Provinsi"},{k:"Kota_Kab",l:"Kota/Kab"},{k:"Kanwil",l:"Kanwil"},{k:"KPKNL",l:"KPKNL"}];
 
   return(
@@ -367,7 +520,7 @@ export default function Dashboard(){
           <h1 style={{fontSize:18,fontWeight:700,color:C.navy,margin:"3px 0 0"}}>Dashboard Aset Properti</h1>
           <div style={{fontSize:10,color:C.slate,marginTop:1}}>{raw.length.toLocaleString("id-ID")} aset dimuat</div>
         </div>
-        <button onClick={()=>{setRaw(null);setDf({});setSearch("");}} style={{padding:"5px 10px",fontSize:10,border:`1px solid ${C.border}`,borderRadius:5,background:C.white,color:C.slate,cursor:"pointer"}}>Ganti File</button>
+        <button onClick={()=>{setRaw(null);setMf({});setSearch("");}} style={{padding:"5px 10px",fontSize:10,border:`1px solid ${C.border}`,borderRadius:5,background:C.white,color:C.slate,cursor:"pointer"}}>Ganti File</button>
       </div>
 
       {/* ── KPIs ── */}
@@ -380,13 +533,13 @@ export default function Dashboard(){
       </div>
 
       {/* ── Filters ── */}
-      <div style={{background:C.white,borderRadius:8,boxShadow:"0 1px 2px rgba(0,0,0,0.04)",marginBottom:10,overflow:"hidden"}}>
+      <div style={{background:C.white,borderRadius:8,boxShadow:"0 1px 2px rgba(0,0,0,0.04)",marginBottom:10,overflow:"visible"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 12px",borderBottom:showF?`1px solid ${C.border}`:"none"}}>
           <button onClick={()=>setShowF(p=>!p)} style={{background:"none",border:"none",cursor:"pointer",fontSize:12,fontWeight:600,color:C.navy,display:"flex",alignItems:"center",gap:4}}>
             <span style={{fontSize:14,transition:"transform .15s",display:"inline-block",transform:showF?"rotate(90deg)":"rotate(0)"}}>▸</span> Filter &amp; Pencarian
           </button>
           <div style={{display:"flex",gap:6,alignItems:"center"}}>
-            {Object.keys(df).length>0&&<span style={{fontSize:9,color:C.blue,fontWeight:600}}>{Object.keys(df).length} aktif</span>}
+            {activeFilterCount>0&&<span style={{fontSize:9,color:C.blue,fontWeight:600}}>{activeFilterCount} filter aktif</span>}
             <button onClick={resetAll} style={{padding:"4px 10px",fontSize:10,fontWeight:600,border:"none",borderRadius:4,background:C.border,color:C.slate,cursor:"pointer"}}>Reset</button>
           </div>
         </div>
@@ -402,23 +555,17 @@ export default function Dashboard(){
             </div>
           </div>
 
-          {/* Dropdowns */}
+          {/* Multi-select dropdowns */}
           <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
-            {DROP_FILTERS.map(({key,l})=>{
-              const opts=dropOpts[key]||[];const on=!!df[key];
-              return(
-                <div key={key} style={{display:"flex",flexDirection:"column",gap:1,minWidth:105,flex:1}}>
-                  <span style={{fontSize:8,fontWeight:600,color:C.slate,textTransform:"uppercase",letterSpacing:.3}}>{l} <span style={{opacity:.5}}>({opts.length})</span></span>
-                  <select style={selSt(on)} value={df[key]||""} onChange={e=>setDrop(key,e.target.value||null)}>
-                    <option value="">Semua</option>
-                    {opts.map(v=><option key={v} value={v}>{v}</option>)}
-                  </select>
-                </div>
-              );
-            })}
+            {MULTI_FILTERS.map(({key,l})=>(
+              <FilterDropdown key={key} label={l}
+                allOptions={dropOpts[key]||[]}
+                selected={mf[key]===undefined?null:mf[key]}
+                onChange={val=>setMfKey(key,val)}/>
+            ))}
           </div>
 
-          {/* Multi-select */}
+          {/* Neraca + Kuadran chips */}
           <div style={{display:"flex",gap:20,flexWrap:"wrap",marginBottom:8}}>
             <MultiChips label="Neraca / CaLK (default: tanpa Released)" all={allNeraca} selected={neracaSel} onChange={s=>{setNeracaSel(s);setPage(0);}}/>
             <MultiChips label="Kuadran" all={allKuadran} selected={kuadranSel} onChange={s=>{setKuadranSel(s);setPage(0);}}/>
@@ -437,18 +584,18 @@ export default function Dashboard(){
          CHARTS
          ══════════════════════════════════════════════════ */}
 
-      {/* Row 1: Geography (tabbed bar) + Jenis Aset (bar) */}
+      {/* Row 1: Geography (tabbed) + Jenis Aset (grouped) */}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
-        <ChartCard title="" style={{minHeight:280}}>
+        <ChartCard style={{minHeight:300}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
             <span style={{fontSize:11,fontWeight:600,color:C.navy}}>Distribusi Wilayah</span>
             <TabBar items={geoTabs} active={geoTab} onChange={setGeoTab}/>
           </div>
-          <HBar data={agg(filtered,geoTab)} h={240}/>
+          <HBar data={agg(filtered,geoTab)} h={260}/>
         </ChartCard>
 
-        <ChartCard title="Jenis Aset" style={{minHeight:280}}>
-          <HBar data={agg(filtered,"Jenis_Aset",12)} h={250}/>
+        <ChartCard title="Jenis Aset" style={{minHeight:300}}>
+          <HBar data={aggGrouped(filtered,"Jenis_Aset",groupJA)} h={260}/>
         </ChartCard>
       </div>
 
@@ -457,8 +604,8 @@ export default function Dashboard(){
         <ChartCard title="Kuadran">
           <Donut data={agg(filtered,"Kuadran",6)}/>
         </ChartCard>
-        <ChartCard title="Kepemilikan">
-          <Donut data={agg(filtered,"Kepemilikan_Tier",5)}/>
+        <ChartCard title="Kepemilikan Dokumen">
+          <Donut data={agg(filtered,"Kepemilikan_Tier",5).map(d=>({...d,name:mapKep(d.name)}))}/>
         </ChartCard>
         <ChartCard title="Sumber (BPPN vs PPA)">
           <Donut data={agg(filtered,"Source",3)}/>
@@ -478,14 +625,14 @@ export default function Dashboard(){
         </ChartCard>
       </div>
 
-      {/* Row 4: Released Reason (only meaningful when Released is included) */}
+      {/* Row 4: Released (conditional) */}
       {neracaSel.has("RELEASED")&&(
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
-          <ChartCard title="Alasan Released" style={{minHeight:250}}>
-            <HBar data={agg(filtered.filter(r=>r.Neraca_CaLK==="RELEASED"),"Released_Reason",8)} color={C.rose} h={210}/>
+          <ChartCard title="Alasan Released" style={{minHeight:260}}>
+            <HBar data={agg(filtered.filter(r=>r.Neraca_CaLK==="RELEASED"),"Released_Reason",8).map(d=>({...d,name:mapRel(d.name)}))} color={C.rose} h={220}/>
           </ChartCard>
           <ChartCard title="Released per Sumber">
-            <Donut data={agg(filtered.filter(r=>r.Neraca_CaLK==="RELEASED"),"Source",3)} h={210}/>
+            <Donut data={agg(filtered.filter(r=>r.Neraca_CaLK==="RELEASED"),"Source",3)} h={220}/>
           </ChartCard>
         </div>
       )}
@@ -519,22 +666,16 @@ export default function Dashboard(){
         </div>
         {totalPg>1&&(
           <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:8,padding:"8px",borderTop:`1px solid ${C.border}`}}>
-            <button onClick={()=>setPage(0)} disabled={page===0}
-              style={{padding:"4px 8px",fontSize:10,border:`1px solid ${C.border}`,borderRadius:4,background:C.white,color:C.navy,cursor:page===0?"default":"pointer",opacity:page===0?.3:1}}>«</button>
-            <button onClick={()=>setPage(p=>Math.max(0,p-1))} disabled={page===0}
-              style={{padding:"4px 8px",fontSize:10,border:`1px solid ${C.border}`,borderRadius:4,background:C.white,color:C.navy,cursor:page===0?"default":"pointer",opacity:page===0?.3:1}}>‹</button>
+            <button onClick={()=>setPage(0)} disabled={page===0} style={{padding:"4px 8px",fontSize:10,border:`1px solid ${C.border}`,borderRadius:4,background:C.white,color:C.navy,cursor:page===0?"default":"pointer",opacity:page===0?.3:1}}>«</button>
+            <button onClick={()=>setPage(p=>Math.max(0,p-1))} disabled={page===0} style={{padding:"4px 8px",fontSize:10,border:`1px solid ${C.border}`,borderRadius:4,background:C.white,color:C.navy,cursor:page===0?"default":"pointer",opacity:page===0?.3:1}}>‹</button>
             <span style={{fontSize:10,color:C.slate,minWidth:60,textAlign:"center"}}>{page+1} / {totalPg}</span>
-            <button onClick={()=>setPage(p=>Math.min(totalPg-1,p+1))} disabled={page>=totalPg-1}
-              style={{padding:"4px 8px",fontSize:10,border:`1px solid ${C.border}`,borderRadius:4,background:C.white,color:C.navy,cursor:page>=totalPg-1?"default":"pointer",opacity:page>=totalPg-1?.3:1}}>›</button>
-            <button onClick={()=>setPage(totalPg-1)} disabled={page>=totalPg-1}
-              style={{padding:"4px 8px",fontSize:10,border:`1px solid ${C.border}`,borderRadius:4,background:C.white,color:C.navy,cursor:page>=totalPg-1?"default":"pointer",opacity:page>=totalPg-1?.3:1}}>»</button>
+            <button onClick={()=>setPage(p=>Math.min(totalPg-1,p+1))} disabled={page>=totalPg-1} style={{padding:"4px 8px",fontSize:10,border:`1px solid ${C.border}`,borderRadius:4,background:C.white,color:C.navy,cursor:page>=totalPg-1?"default":"pointer",opacity:page>=totalPg-1?.3:1}}>›</button>
+            <button onClick={()=>setPage(totalPg-1)} disabled={page>=totalPg-1} style={{padding:"4px 8px",fontSize:10,border:`1px solid ${C.border}`,borderRadius:4,background:C.white,color:C.navy,cursor:page>=totalPg-1?"default":"pointer",opacity:page>=totalPg-1?.3:1}}>»</button>
           </div>
         )}
       </div>
 
-      <div style={{textAlign:"center",fontSize:9,color:"#94A3B8",marginTop:12}}>
-        Data per Juni 2026 · Aset Properti Eks BPPN &amp; Eks Kelolaan PT PPA
-      </div>
+      <div style={{textAlign:"center",fontSize:9,color:"#94A3B8",marginTop:12}}>Data per Juni 2026 · Aset Properti Eks BPPN &amp; Eks Kelolaan PT PPA</div>
     </div>
   );
 }
