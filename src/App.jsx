@@ -348,9 +348,14 @@ export default function Dashboard(){
     setMf(p=>{const n={...p};n[key]=val;return n;});setPage(0);
   },[]);
 
-  /* ── Init on load ── */
+  /* ── Init on load: apply groupings to data ── */
   useEffect(()=>{
     if(!raw)return;
+    raw.forEach(r=>{
+      r.Jenis_Aset=groupJA(r.Jenis_Aset)||r.Jenis_Aset;
+      r.Kepemilikan_Tier=mapKep(r.Kepemilikan_Tier)||r.Kepemilikan_Tier;
+      r.Released_Reason=mapRel(r.Released_Reason)||r.Released_Reason;
+    });
     const nv=new Set(),kv=new Set();
     let lt=[Infinity,0],lb=[Infinity,0],nv2=[Infinity,0];
     raw.forEach(r=>{
@@ -595,7 +600,7 @@ export default function Dashboard(){
         </ChartCard>
 
         <ChartCard title="Jenis Aset" style={{minHeight:300}}>
-          <HBar data={aggGrouped(filtered,"Jenis_Aset",groupJA)} h={260}/>
+          <HBar data={agg(filtered,"Jenis_Aset")} h={260}/>
         </ChartCard>
       </div>
 
@@ -605,7 +610,7 @@ export default function Dashboard(){
           <Donut data={agg(filtered,"Kuadran",6)}/>
         </ChartCard>
         <ChartCard title="Kepemilikan Dokumen">
-          <Donut data={agg(filtered,"Kepemilikan_Tier",5).map(d=>({...d,name:mapKep(d.name)}))}/>
+          <Donut data={agg(filtered,"Kepemilikan_Tier",5)}/>
         </ChartCard>
         <ChartCard title="Sumber (BPPN vs PPA)">
           <Donut data={agg(filtered,"Source",3)}/>
@@ -629,7 +634,7 @@ export default function Dashboard(){
       {neracaSel.has("RELEASED")&&(
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
           <ChartCard title="Alasan Released" style={{minHeight:260}}>
-            <HBar data={agg(filtered.filter(r=>r.Neraca_CaLK==="RELEASED"),"Released_Reason",8).map(d=>({...d,name:mapRel(d.name)}))} color={C.rose} h={220}/>
+            <HBar data={agg(filtered.filter(r=>r.Neraca_CaLK==="RELEASED"),"Released_Reason",8)} color={C.rose} h={220}/>
           </ChartCard>
           <ChartCard title="Released per Sumber">
             <Donut data={agg(filtered.filter(r=>r.Neraca_CaLK==="RELEASED"),"Source",3)} h={220}/>
