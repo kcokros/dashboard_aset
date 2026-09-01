@@ -244,7 +244,7 @@ function FilterDropdown({label,allOptions,selected,onChange}){
           {allOptions.length>6&&(
             <div style={{padding:"6px 8px",borderBottom:`1px solid ${C.border}`}}>
               <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Cari..."
-                style={{width:"100%",padding:"4px 6px",fontSize:11,border:`1px solid ${C.border}`,borderRadius:3,outline:"none",boxSizing:"border-box"}}/>
+                style={{width:"100%",padding:"4px 6px",fontSize:11,border:`1px solid ${C.border}`,borderRadius:3,outline:"none",boxSizing:"border-box",background:C.white,color:C.navy}}/>
             </div>
           )}
 
@@ -284,7 +284,7 @@ function RangeInput({label,value,onChange,formatFn}){
   const [hiTxt,setHiTxt]=useState(String(hi));
   useEffect(()=>{setLoTxt(String(Math.round(lo)));setHiTxt(String(Math.round(hi)));},[lo,hi]);
   const commit=()=>{const nlo=Number(loTxt)||0;const nhi=Number(hiTxt)||0;onChange([Math.min(nlo,nhi),Math.max(nlo,nhi)]);};
-  const inSt={width:100,padding:"5px 6px",fontSize:11,border:`1px solid ${C.border}`,borderRadius:4,color:C.navy,outline:"none",textAlign:"right",fontVariantNumeric:"tabular-nums"};
+  const inSt={width:100,padding:"5px 6px",fontSize:11,border:`1px solid ${C.border}`,borderRadius:4,color:C.navy,background:C.white,outline:"none",textAlign:"right",fontVariantNumeric:"tabular-nums"};
   return(
     <div style={{flex:1,minWidth:180}}>
       <div style={{fontSize:8.5,fontWeight:600,color:C.slate,textTransform:"uppercase",letterSpacing:.3,marginBottom:3}}>{label}</div>
@@ -306,7 +306,7 @@ function UploadView({onData}){
   const [drag,setDrag]=useState(false);
   const go=f=>{const r=new FileReader();r.onload=e=>{try{onData(JSON.parse(e.target.result))}catch{alert("JSON tidak valid")}};r.readAsText(f);};
   return(
-    <div style={{fontFamily:"'Inter',system-ui,sans-serif",background:C.light,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}>
+    <div style={{fontFamily:"'Inter',system-ui,sans-serif",background:C.light,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",boxSizing:"border-box",width:"100%",colorScheme:"light"}}>
       <div style={{textAlign:"center"}}>
         <div style={{fontSize:11,fontWeight:600,color:C.blue,letterSpacing:.8,textTransform:"uppercase"}}>Dashboard Aset Properti</div>
         <h1 style={{fontSize:22,fontWeight:700,color:C.navy,margin:"6px 0 10px"}}>Upload Data JSON</h1>
@@ -516,7 +516,7 @@ export default function Dashboard(){
   const geoTabs=[{k:"Provinsi",l:"Provinsi"},{k:"Kota_Kab",l:"Kota/Kab"},{k:"Kanwil",l:"Kanwil"},{k:"KPKNL",l:"KPKNL"}];
 
   return(
-    <div style={{fontFamily:"'Inter',system-ui,sans-serif",background:C.light,minHeight:"100vh",padding:"16px 14px",maxWidth:1280,margin:"0 auto"}}>
+    <div style={{fontFamily:"'Inter',system-ui,sans-serif",background:C.light,minHeight:"100vh",padding:"16px 14px",maxWidth:1280,margin:"0 auto",boxSizing:"border-box",width:"100%",colorScheme:"light"}}>
 
       {/* ── Header ── */}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"start",marginBottom:4}}>
@@ -556,7 +556,7 @@ export default function Dashboard(){
               <span style={{position:"absolute",left:8,top:6,fontSize:12,color:C.slate}}>🔍</span>
               <input value={search} onChange={e=>{setSearch(e.target.value);setPage(0);}}
                 placeholder="Cari ID, debitur, bank, alamat, KPKNL..."
-                style={{width:"100%",padding:"6px 8px 6px 28px",fontSize:11,border:`1px solid ${C.border}`,borderRadius:5,color:C.navy,outline:"none",boxSizing:"border-box"}}/>
+                style={{width:"100%",padding:"6px 8px 6px 28px",fontSize:11,border:`1px solid ${C.border}`,borderRadius:5,color:C.navy,background:C.white,outline:"none",boxSizing:"border-box"}}/>
             </div>
           </div>
 
