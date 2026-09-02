@@ -696,22 +696,27 @@ export default function Dashboard(){
          ══════════════════════════════════════════════════ */}
       {nomData&&(()=>{
         const nm=nomData;
-        const matched=nm.matched_bppn+nm.matched_ppa+nm.matched_both;
         const covData=[
-          {name:"BPPN",v:nm.matched_bppn},
-          {name:"BPPN & PPA",v:nm.matched_both},{name:"Tidak Tercakup",v:nm.unmatched}
+          {name:"PPA",v:nm.ppa},{name:"BPPN",v:nm.bppn},
+          {name:"Released",v:nm.released},{name:"Aset Titipan",v:nm.titipan||0},
+          {name:"Lain-lain",v:nm.lain_lain},{name:"Belum Terklasifikasi",v:nm.belum}
         ].filter(d=>d.v>0);
-        const gap=nm.gap_data||[];
+        const allData=nm.data||[];
         const GAP_COLS=[
           {k:"Asset_ID",l:"Asset ID",w:110},{k:"Jenis_Asset",l:"Jenis",w:50},
           {k:"Bank",l:"Bank",w:80},{k:"Provinsi",l:"Provinsi",w:90},
           {k:"Kota",l:"Kota",w:100},{k:"Alamat",l:"Alamat",w:200},
           {k:"Ex_Debitur",l:"Debitur",w:120},{k:"Luas_Tanah",l:"L.Tanah",w:70,num:1},
+          {k:"No_PRK",l:"No. PRK",w:110},{k:"Nama_Sheet",l:"Sheet",w:100},
+          {k:"Kategori_Final",l:"Status",w:100},
           {k:"Jenis_Sertifikat",l:"Sertifikat",w:60},{k:"Nomor_Sertifikat",l:"No.Sert",w:100},
           {k:"Telah_Diverifikasi",l:"Verif",w:40},{k:"Keterangan",l:"Keterangan",w:180},
           {k:"Ket_2024",l:"Ket 2024",w:160},{k:"Ket_2025",l:"Ket 2025",w:160},
         ];
-        const gapFiltered=nomSearch.trim()?gap.filter(r=>{const q=nomSearch.trim().toLowerCase();return["Asset_ID","Alamat","Ex_Debitur","Bank","Kota","Provinsi","Keterangan"].some(f=>r[f]&&String(r[f]).toLowerCase().includes(q));}):gap;
+        const nomCatOptions=["Semua","PPA","BPPN","Released","Aset Titipan","Lain-lain","Belum Terklasifikasi"];
+        const [nomCat,setNomCat]=[nomData._cat||"Semua",v=>{nomData._cat=v;setNomData({...nomData});}];
+        const catFiltered=nomCat==="Semua"?allData:allData.filter(r=>r.Kategori_Final===nomCat);
+        const gapFiltered=nomSearch.trim()?catFiltered.filter(r=>{const q=nomSearch.trim().toLowerCase();return["Asset_ID","Alamat","Ex_Debitur","Bank","Kota","Provinsi","Keterangan","No_PRK"].some(f=>r[f]&&String(r[f]).toLowerCase().includes(q));}):catFiltered;
         const gapPg=gapFiltered.slice(nomPage*50,(nomPage+1)*50);
         const gapTotalPg=Math.ceil(gapFiltered.length/50);
 
@@ -731,19 +736,30 @@ export default function Dashboard(){
                   <Donut data={covData} h={120}/>
                 </div>
                 <KPI label="Total Nominatif" value={nm.total.toLocaleString("id-ID")} accent={C.slate}/>
-                <KPI label="Tercakup BPPN" value={nm.matched_bppn.toLocaleString("id-ID")} sub={nm.total?((nm.matched_bppn/nm.total)*100).toFixed(0)+"% dari total":""} accent={C.blue}/>
-                <KPI label="Tercakup BPPN & PPA" value={nm.matched_both.toLocaleString("id-ID")} sub={nm.total?((nm.matched_both/nm.total)*100).toFixed(0)+"% dari total":""} accent={C.violet}/>
-                <KPI label="Tidak Tercakup" value={nm.unmatched.toLocaleString("id-ID")} sub={nm.total?((nm.unmatched/nm.total)*100).toFixed(0)+"% dari total":""} accent={C.rose}/>
+                <KPI label="Masuk PPA" value={nm.ppa.toLocaleString("id-ID")} sub={nm.total?((nm.ppa/nm.total)*100).toFixed(0)+"% dari total":""} accent={C.green}/>
+                <KPI label="Masuk BPPN" value={nm.bppn.toLocaleString("id-ID")} sub={nm.total?((nm.bppn/nm.total)*100).toFixed(0)+"% dari total":""} accent={C.blue}/>
+                <KPI label="Released" value={nm.released.toLocaleString("id-ID")} sub={nm.released_via_crosscheck?nm.released_via_crosscheck+" via cross-check":""} accent={C.rose}/>
+                <KPI label="Aset Titipan" value={(nm.titipan||0).toLocaleString("id-ID")} accent={C.sky}/>
+                <KPI label="Belum Terklasifikasi" value={nm.belum.toLocaleString("id-ID")} sub={nm.total?((nm.belum/nm.total)*100).toFixed(0)+"% dari total":""} accent={C.amber}/>
               </div>
 
-              {/* Full-width gap table */}
+              {/* Full-width table with category filter */}
               <div>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-                  <div style={{fontSize:11,fontWeight:600,color:C.navy}}>Aset Tidak Tercakup ({gapFiltered.length.toLocaleString("id-ID")})</div>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6,flexWrap:"wrap",gap:6}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <div style={{fontSize:11,fontWeight:600,color:C.navy}}>Data Nominatif ({gapFiltered.length.toLocaleString("id-ID")})</div>
+                    <div style={{display:"flex",gap:2}}>
+                      {nomCatOptions.map(cat=>(
+                        <button key={cat} onClick={()=>{nomData._cat=cat;setNomData({...nomData});setNomPage(0);}}
+                          style={{padding:"3px 8px",borderRadius:4,border:`1px solid ${nomCat===cat?C.blue:C.border}`,fontSize:9,fontWeight:nomCat===cat?600:400,
+                            cursor:"pointer",background:nomCat===cat?C.blue:"transparent",color:nomCat===cat?C.white:C.navy}}>{cat}</button>
+                      ))}
+                    </div>
+                  </div>
                   <div style={{position:"relative",width:240}}>
                     <span style={{position:"absolute",left:6,top:5,fontSize:10,color:C.slate}}>🔍</span>
                     <input value={nomSearch} onChange={e=>{setNomSearch(e.target.value);setNomPage(0);}}
-                      placeholder="Cari debitur, alamat, bank..."
+                      placeholder="Cari debitur, alamat, bank, PRK..."
                       style={{width:"100%",padding:"5px 6px 5px 22px",fontSize:10,border:`1px solid ${C.border}`,borderRadius:4,color:C.navy,background:C.white,outline:"none",boxSizing:"border-box"}}/>
                   </div>
                 </div>
