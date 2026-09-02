@@ -331,6 +331,10 @@ function UploadView({onData}){
    ═══════════════════════════════════════════════════════ */
 export default function Dashboard(){
   const [raw,setRaw]=useState(null);
+  const [nomData,setNomData]=useState(null);
+  const [nomSearch,setNomSearch]=useState("");
+  const [nomPage,setNomPage]=useState(0);
+  const [showNom,setShowNom]=useState(true);
   // Multi-select filters: null = no filter (all), Set = selected values
   const [mf,setMf]=useState({});
   const [neracaSel,setNeracaSel]=useState(null);
@@ -525,7 +529,15 @@ export default function Dashboard(){
           <h1 style={{fontSize:18,fontWeight:700,color:C.navy,margin:"3px 0 0"}}>Dashboard Aset Properti</h1>
           <div style={{fontSize:10,color:C.slate,marginTop:1}}>{raw.length.toLocaleString("id-ID")} aset dimuat</div>
         </div>
-        <button onClick={()=>{setRaw(null);setMf({});setSearch("");}} style={{padding:"5px 10px",fontSize:10,border:`1px solid ${C.border}`,borderRadius:5,background:C.white,color:C.slate,cursor:"pointer"}}>Ganti File</button>
+        <div style={{display:"flex",gap:6}}>
+          {(()=>{const nr=useRef();return<>
+            <button onClick={()=>nr.current.click()} style={{padding:"5px 10px",fontSize:10,border:`1px solid ${nomData?C.green:C.blue}`,borderRadius:5,background:C.white,color:nomData?C.green:C.blue,cursor:"pointer",fontWeight:nomData?600:400}}>
+              {nomData?"✓ Nominatif":"+ Nominatif"}
+            </button>
+            <input ref={nr} type="file" accept=".json" hidden onChange={e=>{if(!e.target.files[0])return;const r=new FileReader();r.onload=ev=>{try{setNomData(JSON.parse(ev.target.result))}catch{alert("JSON tidak valid")}};r.readAsText(e.target.files[0]);}}/>
+          </>;})()}
+          <button onClick={()=>{setRaw(null);setMf({});setSearch("");setNomData(null);}} style={{padding:"5px 10px",fontSize:10,border:`1px solid ${C.border}`,borderRadius:5,background:C.white,color:C.slate,cursor:"pointer"}}>Ganti File</button>
+        </div>
       </div>
 
       {/* ── KPIs ── */}
@@ -679,6 +691,101 @@ export default function Dashboard(){
           </div>
         )}
       </div>
+
+      {/* ══════════════════════════════════════════════════
+         NOMINATIF COVERAGE
+         ══════════════════════════════════════════════════ */}
+      {nomData&&(()=>{
+        const nm=nomData;
+        const matched=nm.matched_bppn+nm.matched_ppa+nm.matched_both;
+        const covData=[
+          {name:"BPPN",v:nm.matched_bppn},{name:"PPA",v:nm.matched_ppa},
+          {name:"BPPN & PPA",v:nm.matched_both},{name:"Tidak Tercakup",v:nm.unmatched}
+        ].filter(d=>d.v>0);
+        const gap=nm.gap_data||[];
+        const GAP_COLS=[
+          {k:"Asset_ID",l:"Asset ID",w:110},{k:"Jenis_Asset",l:"Jenis",w:50},
+          {k:"Bank",l:"Bank",w:80},{k:"Provinsi",l:"Provinsi",w:90},
+          {k:"Kota",l:"Kota",w:100},{k:"Alamat",l:"Alamat",w:200},
+          {k:"Ex_Debitur",l:"Debitur",w:120},{k:"Luas_Tanah",l:"L.Tanah",w:70,num:1},
+          {k:"Jenis_Sertifikat",l:"Sertifikat",w:60},{k:"Nomor_Sertifikat",l:"No.Sert",w:100},
+          {k:"Telah_Diverifikasi",l:"Verif",w:40},{k:"Keterangan",l:"Keterangan",w:180},
+          {k:"Ket_2024",l:"Ket 2024",w:160},{k:"Ket_2025",l:"Ket 2025",w:160},
+        ];
+        const gapFiltered=nomSearch.trim()?gap.filter(r=>{const q=nomSearch.trim().toLowerCase();return["Asset_ID","Alamat","Ex_Debitur","Bank","Kota","Provinsi","Keterangan"].some(f=>r[f]&&String(r[f]).toLowerCase().includes(q));}):gap;
+        const gapPg=gapFiltered.slice(nomPage*50,(nomPage+1)*50);
+        const gapTotalPg=Math.ceil(gapFiltered.length/50);
+
+        return(
+          <div style={{background:C.white,borderRadius:8,boxShadow:"0 1px 2px rgba(0,0,0,0.04)",marginBottom:10,overflow:"visible"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 12px",borderBottom:showNom?`1px solid ${C.border}`:"none"}}>
+              <button onClick={()=>setShowNom(p=>!p)} style={{background:"none",border:"none",cursor:"pointer",fontSize:12,fontWeight:600,color:C.navy,display:"flex",alignItems:"center",gap:4}}>
+                <span style={{fontSize:14,transition:"transform .15s",display:"inline-block",transform:showNom?"rotate(90deg)":"rotate(0)"}}>▸</span> Daftar Nominatif — Coverage Analysis
+              </button>
+              <span style={{fontSize:9,color:C.slate}}>{nm.total.toLocaleString("id-ID")} aset nominatif</span>
+            </div>
+
+            {showNom&&<div style={{padding:"10px 12px"}}>
+              {/* KPIs */}
+              <div style={{display:"flex",gap:8,marginBottom:10,flexWrap:"wrap"}}>
+                <KPI label="Total Nominatif" value={nm.total.toLocaleString("id-ID")} accent={C.slate}/>
+                <KPI label="Tercakup BPPN" value={nm.matched_bppn.toLocaleString("id-ID")} accent={C.blue}/>
+                <KPI label="Tercakup PPA" value={nm.matched_ppa.toLocaleString("id-ID")} accent={C.green}/>
+                <KPI label="Tercakup Keduanya" value={nm.matched_both.toLocaleString("id-ID")} accent={C.violet}/>
+                <KPI label="Tidak Tercakup" value={nm.unmatched.toLocaleString("id-ID")} sub={nm.total?((nm.unmatched/nm.total)*100).toFixed(0)+"% dari total":""} accent={C.rose}/>
+              </div>
+
+              {/* Chart + Gap table */}
+              <div style={{display:"grid",gridTemplateColumns:"280px 1fr",gap:10}}>
+                {/* Coverage donut */}
+                <div style={{minHeight:220}}>
+                  <div style={{fontSize:11,fontWeight:600,color:C.navy,marginBottom:6}}>Coverage</div>
+                  <Donut data={covData} h={200}/>
+                </div>
+
+                {/* Gap mini table */}
+                <div>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                    <div style={{fontSize:11,fontWeight:600,color:C.navy}}>Aset Tidak Tercakup ({gapFiltered.length.toLocaleString("id-ID")})</div>
+                    <div style={{position:"relative",width:220}}>
+                      <span style={{position:"absolute",left:6,top:5,fontSize:10,color:C.slate}}>🔍</span>
+                      <input value={nomSearch} onChange={e=>{setNomSearch(e.target.value);setNomPage(0);}}
+                        placeholder="Cari debitur, alamat, bank..."
+                        style={{width:"100%",padding:"5px 6px 5px 22px",fontSize:10,border:`1px solid ${C.border}`,borderRadius:4,color:C.navy,background:C.white,outline:"none",boxSizing:"border-box"}}/>
+                    </div>
+                  </div>
+                  <div style={{overflowX:"auto",maxHeight:320,border:`1px solid ${C.border}`,borderRadius:6}}>
+                    <table style={{width:"100%",borderCollapse:"collapse"}}>
+                      <thead>
+                        <tr>{GAP_COLS.map(c=><th key={c.k} style={{padding:"5px 6px",fontSize:8,fontWeight:600,color:C.slate,textTransform:"uppercase",textAlign:"left",whiteSpace:"nowrap",minWidth:c.w,borderBottom:`2px solid ${C.border}`,background:"#FAFBFC",position:"sticky",top:0,zIndex:1}}>{c.l}</th>)}</tr>
+                      </thead>
+                      <tbody>
+                        {gapPg.length===0&&<tr><td colSpan={GAP_COLS.length} style={{padding:16,fontSize:10,color:C.slate,textAlign:"center"}}>Tidak ada data.</td></tr>}
+                        {gapPg.map((r,i)=>(
+                          <tr key={i} style={{background:i%2===0?C.white:"#FAFBFC"}}>
+                            {GAP_COLS.map(c=>(
+                              <td key={c.k} style={{padding:"4px 6px",fontSize:10,color:"#334155",borderBottom:`1px solid ${C.light}`,whiteSpace:"nowrap",textAlign:c.num?"right":"left"}}>
+                                {fmtCell(r[c.k],c.num)}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {gapTotalPg>1&&(
+                    <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:6,padding:"6px",fontSize:10,color:C.slate}}>
+                      <button onClick={()=>setNomPage(p=>Math.max(0,p-1))} disabled={nomPage===0} style={{padding:"3px 8px",fontSize:10,border:`1px solid ${C.border}`,borderRadius:4,background:C.white,color:C.navy,cursor:nomPage===0?"default":"pointer",opacity:nomPage===0?.3:1}}>‹</button>
+                      <span>{nomPage+1} / {gapTotalPg}</span>
+                      <button onClick={()=>setNomPage(p=>Math.min(gapTotalPg-1,p+1))} disabled={nomPage>=gapTotalPg-1} style={{padding:"3px 8px",fontSize:10,border:`1px solid ${C.border}`,borderRadius:4,background:C.white,color:C.navy,cursor:nomPage>=gapTotalPg-1?"default":"pointer",opacity:nomPage>=gapTotalPg-1?.3:1}}>›</button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>}
+          </div>
+        );
+      })()}
 
       <div style={{textAlign:"center",fontSize:9,color:"#94A3B8",marginTop:12}}>Data per Juni 2026 · Aset Properti Eks BPPN &amp; Eks Kelolaan PT PPA</div>
     </div>
