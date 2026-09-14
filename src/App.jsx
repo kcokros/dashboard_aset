@@ -86,8 +86,8 @@ function aggGrouped(data,key,groupFn,limit=12){
   return Object.entries(m).map(([name,v])=>({name,v})).sort((a,b)=>b.v-a.v).slice(0,limit);
 }
 
-// Kepemilikan label mapping (for data exported with old labels)
-const KEP_MAP={"Sertifikat":"SHP/SHM/SHGB/SHMSRS","Dok Kepemilikan":"Girik/Letter C/Petok","Dok Lainnya":"AJB/Covernote/dll"};
+// Kepemilikan label mapping (for data exported with old grouped labels)
+const KEP_MAP={"Sertifikat":"SHM","Dok Kepemilikan":"Girik/Letter C/Petok","Dok Lainnya":"AJB/Covernote/dll","SHP/SHM/SHGB/SHMSRS":"SHM"};
 function mapKep(v){return KEP_MAP[v]||v;}
 
 // Released reason mapping
@@ -98,11 +98,15 @@ function mapRel(v){if(v==="Administratif")return"Lainnya";return v;}
    ═══════════════════════════════════════════════════════ */
 
 const BADGE_COLORS={
+  "SHM":{bg:"#DCFCE7",fg:"#166534"},"SHP":{bg:"#DCFCE7",fg:"#166534"},
+  "SHM (Campuran)":{bg:"#D1FAE5",fg:"#065F46"},"SHP (Campuran)":{bg:"#D1FAE5",fg:"#065F46"},
+  "SHGB":{bg:"#DBEAFE",fg:"#1E40AF"},"SHMSRS":{bg:"#DBEAFE",fg:"#1E40AF"},
+  "SHGU":{bg:"#E0E7FF",fg:"#3730A3"},
   "SHP/SHM/SHGB/SHMSRS":{bg:"#DCFCE7",fg:"#166534"},"Sertifikat":{bg:"#DCFCE7",fg:"#166534"},
-  "Girik/Letter C/Petok":{bg:"#FEF9C3",fg:"#854D0E"},"Dok Kepemilikan":{bg:"#FEF9C3",fg:"#854D0E"},
+  "Girik/Letter C/Petok":{bg:"#FEF9C3",fg:"#854D0E"},"Girik":{bg:"#FEF9C3",fg:"#854D0E"},
+  "Dok Kepemilikan":{bg:"#FEF9C3",fg:"#854D0E"},
   "AJB/Covernote/dll":{bg:"#F1F5F9",fg:"#475569"},"Dok Lainnya":{bg:"#F1F5F9",fg:"#475569"},
   "Aktif":{bg:"#DCFCE7",fg:"#166534"},"Tidak Aktif":{bg:"#FEE2E2",fg:"#991B1B"},
-  "Tidak Diketahui":{bg:"#F1F5F9",fg:"#475569"},
   "Sudah":{bg:"#DBEAFE",fg:"#1E40AF"},"Belum":{bg:"#FEF3C7",fg:"#92400E"},
 };
 function Badge({value}){
@@ -156,6 +160,61 @@ function Donut({data,h=190}){
         <Tooltip formatter={v=>`${v.toLocaleString("id-ID")} (${total?((v/total)*100).toFixed(1):"0"}%)`}/>
       </PieChart>
     </ResponsiveContainer>
+  );
+}
+
+/* FlexChart: toggleable pie/bar with full legend */
+function FlexChart({data,h=190}){
+  const [mode,setMode]=useState("pie");
+  const total=data.reduce((s,x)=>s+x.v,0);
+  if(!total)return<div style={{color:C.slate,fontSize:11,textAlign:"center",paddingTop:40}}>Tidak ada data</div>;
+  return(
+    <div>
+      {/* Toggle */}
+      <div style={{display:"flex",justifyContent:"flex-end",marginBottom:4}}>
+        <div style={{display:"flex",background:C.light,borderRadius:4,overflow:"hidden",border:`1px solid ${C.border}`}}>
+          <button onClick={()=>setMode("pie")} style={{padding:"2px 8px",fontSize:9,border:"none",cursor:"pointer",
+            background:mode==="pie"?C.blue:"transparent",color:mode==="pie"?C.white:C.slate,fontWeight:600}}>◔</button>
+          <button onClick={()=>setMode("bar")} style={{padding:"2px 8px",fontSize:9,border:"none",cursor:"pointer",
+            background:mode==="bar"?C.blue:"transparent",color:mode==="bar"?C.white:C.slate,fontWeight:600}}>☰</button>
+        </div>
+      </div>
+
+      {mode==="pie"?(
+        <div>
+          <ResponsiveContainer width="100%" height={h-30}>
+            <PieChart>
+              <Pie data={data} dataKey="v" nameKey="name" cx="50%" cy="48%" innerRadius="34%" outerRadius="64%" paddingAngle={2}
+                label={({name,percent})=>percent>.04?`${(percent*100).toFixed(0)}%`:""} labelLine={false} style={{fontSize:9}}>
+                {data.map((_,i)=><Cell key={i} fill={PAL[i%PAL.length]}/>)}
+              </Pie>
+              <Tooltip formatter={v=>`${v.toLocaleString("id-ID")} (${total?((v/total)*100).toFixed(1):"0"}%)`}/>
+            </PieChart>
+          </ResponsiveContainer>
+          {/* Full legend */}
+          <div style={{display:"flex",flexWrap:"wrap",gap:"2px 10px",justifyContent:"center",marginTop:2}}>
+            {data.map((d,i)=>(
+              <div key={d.name} style={{display:"flex",alignItems:"center",gap:3,fontSize:9,color:C.navy}}>
+                <span style={{width:8,height:8,borderRadius:2,background:PAL[i%PAL.length],flexShrink:0}}/>
+                <span>{d.name}</span>
+                <span style={{color:C.slate}}>({d.v.toLocaleString("id-ID")} · {((d.v/total)*100).toFixed(1)}%)</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ):(
+        <ResponsiveContainer width="100%" height={Math.max(h, data.length*24+20)}>
+          <BarChart data={data} layout="vertical" margin={{left:8,right:14,top:0,bottom:0}}>
+            <XAxis type="number" tickFormatter={fmt} tick={{fontSize:9}}/>
+            <YAxis type="category" dataKey="name" width={120} tick={{fontSize:9}} interval={0}/>
+            <Tooltip formatter={v=>`${v.toLocaleString("id-ID")} (${((v/total)*100).toFixed(1)}%)`}/>
+            <Bar dataKey="v" radius={[0,3,3,0]} barSize={15}>
+              {data.map((_,i)=><Cell key={i} fill={PAL[i%PAL.length]}/>)}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      )}
+    </div>
   );
 }
 
@@ -618,26 +677,26 @@ export default function Dashboard(){
       {/* Row 2: Kuadran + Kepemilikan + Source */}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:10}}>
         <ChartCard title="Kuadran">
-          <Donut data={agg(filtered,"Kuadran",6)}/>
+          <FlexChart data={agg(filtered,"Kuadran",20)}/>
         </ChartCard>
         <ChartCard title="Kepemilikan Dokumen">
-          <Donut data={agg(filtered,"Kepemilikan_Tier",5)}/>
+          <FlexChart data={agg(filtered,"Kepemilikan_Tier",20)}/>
         </ChartCard>
         <ChartCard title="Sumber (BPPN vs PPA)">
-          <Donut data={agg(filtered,"Source",3)}/>
+          <FlexChart data={agg(filtered,"Source",10)}/>
         </ChartCard>
       </div>
 
       {/* Row 3: Masa Berlaku + Penitipan + Blokir */}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:10}}>
         <ChartCard title="Masa Berlaku Dokumen">
-          <Donut data={agg(filtered,"Masa_Berlaku",5)}/>
+          <FlexChart data={agg(filtered,"Masa_Berlaku",10)}/>
         </ChartCard>
         <ChartCard title="Penitipan ke KPKNL">
-          <Donut data={agg(filtered,"Penitipan_Status",3)}/>
+          <FlexChart data={agg(filtered,"Penitipan_Status",10)}/>
         </ChartCard>
         <ChartCard title="Surat Blokir">
-          <Donut data={agg(filtered,"Blokir_Status",3)}/>
+          <FlexChart data={agg(filtered,"Blokir_Status",10)}/>
         </ChartCard>
       </div>
 
@@ -648,7 +707,7 @@ export default function Dashboard(){
             <HBar data={agg(filtered.filter(r=>r.Neraca_CaLK==="RELEASED"),"Released_Reason",8)} color={C.rose} h={220}/>
           </ChartCard>
           <ChartCard title="Released per Sumber">
-            <Donut data={agg(filtered.filter(r=>r.Neraca_CaLK==="RELEASED"),"Source",3)} h={220}/>
+            <FlexChart data={agg(filtered.filter(r=>r.Neraca_CaLK==="RELEASED"),"Source",10)} h={220}/>
           </ChartCard>
         </div>
       )}
